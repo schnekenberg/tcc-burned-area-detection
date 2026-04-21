@@ -1,0 +1,96 @@
+// -----------------------------
+// 1. defining the area
+// -----------------------------
+
+/*
+  a small region in Roraima has been chosen for initial testing of
+  the data's exporting process
+*/
+var amazon = ee.Geometry.Rectangle([-60.85, 2.70, -60.75, 2.80]);
+Map.setCenter(-60.80, 2.75, 11);
+Map.addLayer(amazon, {}, 'test area');
+
+// -----------------------------
+// 2. cloud mask function
+// -----------------------------
+
+function maskS2clouds(image) {
+  var scl  = image.select('SCL');
+
+  var mask = scl.neq(3)  //cloud shadow
+      .and(scl.neq(8))   //cloud medium probability
+      .and(scl.neq(9))   //cloud high probability
+      .and(scl.neq(10))  //cirrus
+      .and(scl.neq(11)); //snow
+
+  return image.updateMask(mask).divide(10000);
+}
+
+
+// -----------------------------
+// 3. loading sentinel-2 data
+// -----------------------------
+
+var s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterBounds(amazon)
+  .filterDate('2024-07-01', '2024-10-01')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskS2clouds);
+
+
+// -----------------------------
+// 4. creating temporal mosaic
+// -----------------------------
+
+var composite = s2.median().clip(amazon);
+
+
+// -----------------------------
+// 5. calculating indexes (NVDI, NBR)
+// -----------------------------
+
+var ndvi = composite.normalizedDifference(['B8','B4']).rename('NDVI');
+
+var nbr = composite.normalizedDifference(['B8','B12']).rename('NBR');
+
+var finalImage = composite
+  .select(['B2','B3','B4','B8','B11','B12'])
+  .addBands(ndvi)
+  .addBands(nbr);
+
+
+// -----------------------------
+// 6. layers for visualizing
+// -----------------------------
+
+Map.addLayer(
+  composite,
+  {bands:['B4','B3','B2'], min:0, max:0.3},
+  'Sentinel RGB'
+);
+
+Map.addLayer(
+  ndvi,
+  {min:-1, max:1},
+  'NDVI'
+);
+
+Map.addLayer(
+  nbr,
+  {min:-1, max:1},
+  'NBR'
+);
+
+
+// -----------------------------
+// 7. exporting data to google drive
+// -----------------------------
+
+Export.image.toDrive({
+  image: finalImage,
+  description: 'amazon_fire_features',
+  folder: 'GEE_exports',
+  scale: 20,
+  region: amazon,
+  maxPixels: 1e13
+});
