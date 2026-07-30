@@ -102,7 +102,7 @@ months.forEach(function (m){
     .addBands(ndvi)
     .addBands(nbr); // imagem Sentinel-2 final do mês
     
-  // 10. máscara queimadas cumulativa até o mês correspondente
+  // 10. máscara de queimadas do mês correspondente
   var fireMask = getFireMask(m.year, m.month);
     
   // 11. exportações do mês para o google cloud storage
